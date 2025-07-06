@@ -36,6 +36,13 @@ pipeline {
                 sh script: '/opt/maven/bin/mvn package'	
            }		
         }
+        stage('Deploy') {
+            steps {
+                sh 'mkdir -p /var/www/develop-branch'
+                sh 'cp target/*.jar /var/www/develop-branch/'
+                sh 'cp -r target/site /var/www/develop-branch/'
+            }
+        }
     }
     post {
         always {
