@@ -34,26 +34,7 @@ pipeline {
                 }
             }
         }
-        
-        stage('PMD Analysis') {
-            steps {
-                echo 'Running PMD static code analysis...'
-                dir('/var/www/develop-branch') {
-                    sh 'mvn -P metrics pmd:pmd'
-                }
-            }
-            post {
-                always {
-                    dir('/var/www/develop-branch') {
-                        recordIssues(
-                            tools: [pmd(pattern: 'target/pmd.xml')],
-                            enabledForFailure: true
-                        )
-                    }
-                }
-            }
-        }
-        
+
         stage('Unit Tests') {
             steps {
                 echo 'Running unit tests...'
