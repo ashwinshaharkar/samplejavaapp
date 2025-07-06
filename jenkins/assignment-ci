@@ -75,14 +75,11 @@ pipeline {
             }
         }
         
-        stage('Package') {
+       stage('Package') {
             steps {
-                echo 'Building package...'
-                dir('/var/www/develop-branch') {
-                    sh 'mvn package'
-                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-                }
-            }
+                echo 'Package..'
+                sh script: '/opt/maven/bin/mvn package'	
+           }		
         }
         
         stage('Deploy') {
