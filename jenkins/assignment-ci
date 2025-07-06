@@ -1,53 +1,126 @@
 pipeline {
     agent any
     stages {
+        stage('Checkout to Target Folder') {
+            steps {
+                echo 'Checking out source code to /var/www/develop-branch'
+                dir('/var/www/develop-branch') {
+                    // Clean the directory first
+                    deleteDir()
+                    
+                    // Checkout directly to the target folder
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: 'develop']],
+                        extensions: [
+                            [$class: 'RelativeTargetDirectory', relativeTargetDir: '.']
+                        ],
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/ashwinshaharkar/samplejavaapp.git'
+                        ]]
+                    ])
+                    
+                    // Verify checkout
+                    sh 'ls -la'
+                }
+            }
+        }
+        
         stage('Maven Compile') {
             steps {
-                echo 'Compiling..'
-                git url: 'https://github.com/ashwinshaharkar/samplejavaapp'
-                sh script: '/opt/maven/bin/mvn compile'
-           }
+                echo 'Compiling source code...'
+                dir('/var/www/develop-branch') {
+                    sh 'mvn compile'
+                }
+            }
         }
-        stage('Unit Tests') {
+        
+        stage('PMD Analysis') {
             steps {
-                echo 'Running Unit Tests...'
-                sh '/opt/maven/bin/mvn test'
+                echo 'Running PMD static code analysis...'
+                dir('/var/www/develop-branch') {
+                    sh 'mvn -P metrics pmd:pmd'
+                }
             }
             post {
                 always {
-                    junit 'target/surefire-reports/*.xml'
+                    dir('/var/www/develop-branch') {
+                        recordIssues(
+                            tools: [pmd(pattern: 'target/pmd.xml')],
+                            enabledForFailure: true
+                        )
+                    }
                 }
             }
         }
+        
+        stage('Unit Tests') {
+            steps {
+                echo 'Running unit tests...'
+                dir('/var/www/develop-branch') {
+                    sh 'mvn test'
+                }
+            }
+            post {
+                always {
+                    dir('/var/www/develop-branch') {
+                        junit 'target/surefire-reports/*.xml'
+                    }
+                }
+            }
+        }
+        
         stage('Verification') {
             steps {
-                echo 'Verification..'
-                sh script: '/opt/maven/bin/mvn verify'
+                echo 'Running verification...'
+                dir('/var/www/develop-branch') {
+                    sh 'mvn verify'
+                }
             }
             post {
                 success {
-                    jacoco buildOverBuild: true, deltaBranchCoverage: '20', deltaClassCoverage: '20', deltaComplexityCoverage: '20', deltaInstructionCoverage: '20', deltaLineCoverage: '20', deltaMethodCoverage: '20'
+                    dir('/var/www/develop-branch') {
+                        jacoco(
+                            buildOverBuild: true,
+                            deltaBranchCoverage: '20',
+                            deltaClassCoverage: '20',
+                            deltaComplexityCoverage: '20',
+                            deltaInstructionCoverage: '20',
+                            deltaLineCoverage: '20',
+                            deltaMethodCoverage: '20'
+                        )
+                    }
                 }
-            }			
+            }
         }
+        
         stage('Package') {
             steps {
-                echo 'Package..'
-                sh script: '/opt/maven/bin/mvn package'	
-           }		
+                echo 'Building package...'
+                dir('/var/www/develop-branch') {
+                    sh 'mvn package'
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
+            }
         }
+        
         stage('Deploy') {
             steps {
-                sh 'mkdir -p /var/www/develop-branch'
-                sh 'cp target/*.jar /var/www/develop-branch/'
-                sh 'cp -r target/site /var/www/develop-branch/'
+                echo 'Deploying artifacts...'
+                dir('/var/www/develop-branch') {
+                    sh 'mkdir -p /var/www/deployment || true'
+                    sh 'cp target/*.jar /var/www/deployment/'
+                    sh 'ls -la /var/www/deployment/'
+                }
             }
         }
     }
+    
     post {
         always {
-            // Clean up workspace after build
-            cleanWs()
+            echo 'Pipeline completed - cleaning up'
+            // Optional: Clean up workspace
+            // cleanWs()
         }
         success {
             slackSend color: 'good', message: "Build Successful: ${env.JOB_NAME} ${env.BUILD_NUMBER}"
@@ -56,5 +129,4 @@ pipeline {
             slackSend color: 'danger', message: "Build Failed: ${env.JOB_NAME} ${env.BUILD_NUMBER}"
         }
     }
-
 }
